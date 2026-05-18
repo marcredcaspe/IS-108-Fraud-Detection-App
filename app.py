@@ -1,9 +1,15 @@
 import os
+import warnings
 
-# Create Streamlit config file to bypass the 200MB upload limit
+# --- AUTOMATIC CONFIGURATION & CLEANUP ---
+# Bypass the 200MB upload limit
 os.makedirs('.streamlit', exist_ok=True)
 with open('.streamlit/config.toml', 'w') as f:
     f.write('[server]\nmaxUploadSize = 1000\n')
+
+# Hide all Python warnings (pink boxes) for a clean UI presentation
+warnings.filterwarnings("ignore")
+# -----------------------------------------
 
 import streamlit as st
 import pandas as pd
@@ -39,8 +45,8 @@ if 'models' not in st.session_state:
 st.sidebar.header("Data Upload")
 uploaded_file = st.sidebar.file_uploader("Upload Dataset (CSV or Excel)", type=["csv", "xlsx"])
 
-# Cache function to prevent reloading large files on every button click
-@st.cache_data(show_spinner="Loading dataset...")
+# UPGRADE: max_entries=1 prevents Out-Of-Memory crashes by deleting old files from RAM
+@st.cache_data(max_entries=1, show_spinner="Loading massive dataset into memory...")
 def load_data(file):
     if file.name.endswith('.csv'):
         return pd.read_csv(file)
@@ -48,7 +54,6 @@ def load_data(file):
         return pd.read_excel(file)
 
 if uploaded_file is not None:
-    # UPGRADE: Track file size + name so it wipes memory even if filenames are identical
     file_signature = f"{uploaded_file.name}_{uploaded_file.size}"
     
     if 'current_file' not in st.session_state or st.session_state.current_file != file_signature:
@@ -99,10 +104,9 @@ with tabs[1]:
     st.header("Data Preprocessing and Balancing")
     if st.session_state.df is not None:
         df = st.session_state.df.copy()
-        file_sig = st.session_state.current_file # Used for dynamic keys
+        file_sig = st.session_state.current_file 
         
         st.subheader("Target Variable Configuration")
-        # UPGRADE: Added dynamic key to prevent Ghost Memory
         target_col = st.selectbox(
             "Select the Target Column (Label):", 
             df.columns, 
@@ -111,7 +115,6 @@ with tabs[1]:
         )
         
         feature_cols = [col for col in df.columns if col != target_col]
-        # UPGRADE: Added dynamic key to prevent Ghost Memory
         selected_features = st.multiselect(
             "Select Features for Training:", 
             feature_cols, 
@@ -264,7 +267,7 @@ with tabs[3]:
     if st.session_state.models is not None and st.session_state.processed_data is not None:
         data = st.session_state.processed_data
         df_orig = st.session_state.df
-        file_sig = st.session_state.current_file # Used for dynamic keys
+        file_sig = st.session_state.current_file 
         
         st.markdown("Enter custom values below to predict if a transaction is fraudulent or legitimate.")
         
@@ -280,7 +283,6 @@ with tabs[3]:
                 unique_vals = df_orig[col].dropna().astype(str).unique()
                 display_vals = unique_vals[:100] if len(unique_vals) > 100 else unique_vals
                 
-                # UPGRADE: Added dynamic key to prevent Ghost Memory
                 chosen_val = target_col_ui.selectbox(
                     col, 
                     display_vals,
@@ -299,7 +301,6 @@ with tabs[3]:
                 max_v = float(df_orig[col].max())
                 mean_v = float(df_orig[col].mean())
                 
-                # UPGRADE: Added dynamic key to prevent Ghost Memory
                 if min_v == max_v:
                     chosen_val = target_col_ui.number_input(
                         col, 
@@ -319,9 +320,11 @@ with tabs[3]:
         model_choice = st.radio("Select Model for Prediction:", ["KNN", "SVM", "ANN"], horizontal=True)
         
         if st.button("Run Prediction"):
-            # Format and scale input data
             ordered_input = [input_data[c] for c in data["features"]]
-            scaled_input = data["scaler"].transform([ordered_input])
+            
+            # UPGRADE: Convert to DataFrame to stop Scaler warnings
+            input_df = pd.DataFrame([ordered_input], columns=data["features"])
+            scaled_input = data["scaler"].transform(input_df)
             
             # Predict using the selected model
             selected_model_instance = st.session_state.models[model_choice]["instance"]
