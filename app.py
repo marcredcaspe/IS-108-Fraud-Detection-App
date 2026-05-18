@@ -48,9 +48,11 @@ def load_data(file):
         return pd.read_excel(file)
 
 if uploaded_file is not None:
-    # Clear memory if a completely new file is uploaded
-    if 'current_file' not in st.session_state or st.session_state.current_file != uploaded_file.name:
-        st.session_state.current_file = uploaded_file.name
+    # UPGRADE: Track file size + name so it wipes memory even if filenames are identical
+    file_signature = f"{uploaded_file.name}_{uploaded_file.size}"
+    
+    if 'current_file' not in st.session_state or st.session_state.current_file != file_signature:
+        st.session_state.current_file = file_signature
         st.session_state.processed_data = None
         st.session_state.models = None
         
@@ -64,7 +66,7 @@ if uploaded_file is not None:
 tabs = st.tabs(["Data Exploration", "Data Preprocessing", "Model Training", "Make Predictions"])
 
 # ==========================================
-# TAB: DATA EXPLORATION
+# TAB 1: DATA EXPLORATION
 # ==========================================
 with tabs[0]:
     st.header("Data Exploration")
@@ -78,7 +80,7 @@ with tabs[0]:
         col3.metric("Missing Values", df.isnull().sum().sum())
         
         st.subheader("Dataset Preview")
-        st.dataframe(df.head(100), use_container_width=True)
+        st.dataframe(df.head(100).astype(str), width="stretch")
         
         st.subheader("Dataset Information")
         meta_df = pd.DataFrame({
@@ -86,23 +88,36 @@ with tabs[0]:
             "Non-Null Count": df.notnull().sum(),
             "Missing Count": df.isnull().sum()
         })
-        st.dataframe(meta_df.T, use_container_width=True)
+        st.dataframe(meta_df.T.astype(str), width="stretch")
     else:
         st.info("Please upload a dataset in the sidebar to begin.")
 
 # ==========================================
-# TAB: DATA PREPROCESSING
+# TAB 2: DATA PREPROCESSING
 # ==========================================
 with tabs[1]:
     st.header("Data Preprocessing and Balancing")
     if st.session_state.df is not None:
         df = st.session_state.df.copy()
+        file_sig = st.session_state.current_file # Used for dynamic keys
         
         st.subheader("Target Variable Configuration")
-        target_col = st.selectbox("Select the Target Column (Label):", df.columns, index=len(df.columns)-1)
+        # UPGRADE: Added dynamic key to prevent Ghost Memory
+        target_col = st.selectbox(
+            "Select the Target Column (Label):", 
+            df.columns, 
+            index=len(df.columns)-1,
+            key=f"target_{file_sig}"
+        )
         
         feature_cols = [col for col in df.columns if col != target_col]
-        selected_features = st.multiselect("Select Features for Training:", feature_cols, default=feature_cols[:15])
+        # UPGRADE: Added dynamic key to prevent Ghost Memory
+        selected_features = st.multiselect(
+            "Select Features for Training:", 
+            feature_cols, 
+            default=feature_cols[:15],
+            key=f"features_{file_sig}"
+        )
         
         st.subheader("Row Limit Control")
         st.markdown("*Limit the dataset size to prevent server crashes during training.*")
@@ -133,7 +148,7 @@ with tabs[1]:
                 X = df_balanced[selected_features].copy()
                 y = df_balanced[target_col].copy()
                 
-                # Handle missing values and encoding dynamically based on data type
+                # Handle missing values and encoding dynamically
                 num_cols = X.select_dtypes(include=['int64', 'float64']).columns
                 cat_cols = X.select_dtypes(include=['object', 'category']).columns
                 
@@ -171,12 +186,12 @@ with tabs[1]:
         
         if st.session_state.processed_data is not None:
             st.write("**Preview of Processed Data:**")
-            st.dataframe(st.session_state.processed_data["clean_df_sample"], use_container_width=True)
+            st.dataframe(st.session_state.processed_data["clean_df_sample"].astype(str), width="stretch")
     else:
         st.info("Upload a dataset to access preprocessing options.")
 
 # ==========================================
-# TAB: MODEL TRAINING
+# TAB 3: MODEL TRAINING
 # ==========================================
 with tabs[2]:
     st.header("Model Training and Evaluation")
@@ -242,13 +257,14 @@ with tabs[2]:
         st.info("Process the data in the Preprocessing tab before training models.")
 
 # ==========================================
-# TAB: MAKE PREDICTIONS
+# TAB 4: MAKE PREDICTIONS
 # ==========================================
 with tabs[3]:
     st.header("Make Predictions")
     if st.session_state.models is not None and st.session_state.processed_data is not None:
         data = st.session_state.processed_data
         df_orig = st.session_state.df
+        file_sig = st.session_state.current_file # Used for dynamic keys
         
         st.markdown("Enter custom values below to predict if a transaction is fraudulent or legitimate.")
         
@@ -264,7 +280,12 @@ with tabs[3]:
                 unique_vals = df_orig[col].dropna().astype(str).unique()
                 display_vals = unique_vals[:100] if len(unique_vals) > 100 else unique_vals
                 
-                chosen_val = target_col_ui.selectbox(col, display_vals)
+                # UPGRADE: Added dynamic key to prevent Ghost Memory
+                chosen_val = target_col_ui.selectbox(
+                    col, 
+                    display_vals,
+                    key=f"cat_{col}_{file_sig}"
+                )
                 
                 try:
                     encoded_val = data["label_encoders"][col].transform([chosen_val])[0]
@@ -278,10 +299,21 @@ with tabs[3]:
                 max_v = float(df_orig[col].max())
                 mean_v = float(df_orig[col].mean())
                 
+                # UPGRADE: Added dynamic key to prevent Ghost Memory
                 if min_v == max_v:
-                    chosen_val = target_col_ui.number_input(col, value=mean_v)
+                    chosen_val = target_col_ui.number_input(
+                        col, 
+                        value=mean_v,
+                        key=f"num_{col}_{file_sig}"
+                    )
                 else:
-                    chosen_val = target_col_ui.number_input(col, min_value=min_v, max_value=max_v, value=mean_v)
+                    chosen_val = target_col_ui.number_input(
+                        col, 
+                        min_value=min_v, 
+                        max_value=max_v, 
+                        value=mean_v,
+                        key=f"num_{col}_{file_sig}"
+                    )
                 input_data[col] = chosen_val
         
         model_choice = st.radio("Select Model for Prediction:", ["KNN", "SVM", "ANN"], horizontal=True)
