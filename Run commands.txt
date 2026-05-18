@@ -1,0 +1,31 @@
+NOTE: Use the code in VScode
+
+1. Create venv in terminal
+	Steps: 
+		1. open new terminal
+		2. enter python -m venv venv
+
+2. Use venv python interpreter
+	Steps: 
+		1. enter ctrl + shift + p
+		2. select python enterpreter
+		3. choose venv
+
+3. Activate venv
+	Steps:
+		1. open new terminal
+		2. enter: .\venv\Scripts\Activate.ps1
+
+4. Download dependencies
+	Steps:
+		1. open terminal (Make sure venv is activated)
+		2. enter: pip install -r requirements.txt
+		3. wait for dependencies to finish installing
+
+5. Run code
+	Steps:
+		1. open terminal (Make sure venv is activated)
+		2. enter: streamlit run app.py 
+		3. alt: streamlit run app.py --server.maxUploadSize 1000
+		
+		
